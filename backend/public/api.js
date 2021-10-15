@@ -24,25 +24,20 @@ router.route('/covidporestadoperiodo')
         if (!req.query.dateEnd) {
             invalidParms.push('O parâmetro "dateEnd" é obrigatório')
         }
-
         if (invalidParms.length > 0) {
             res.status(500).json(invalidParms)
             return
         }
-
         if (!moment(req.query.dateStart, 'YYYY-MM-DD', true).isValid()) {
             invalidParms.push('Informe o parâmetro "dateStart" no formato YYYY-MM-DD')
         }
-
         if (!moment(req.query.dateEnd, 'YYYY-MM-DD', true).isValid()) {
             invalidParms.push('Informe o parâmetro "dateEnd" no formato YYYY-MM-DD')
         }
-
         if (invalidParms.length > 0) {
             res.status(500).json(invalidParms)
             return
         }
-
         if (!moment(req.query.dateStart).isSame(req.query.dateEnd)) {
             if (!moment(req.query.dateEnd).isAfter(req.query.dateStart)) {
                 res.status(500).json(['O parâmetro "dateStart" deve ser igual ou menor do que o parâmetro "dateEnd"'])
@@ -73,22 +68,22 @@ router.route('/covidporestadoperiodo')
 
             let requests = []
             datesBetween.forEach(date => {
-                console.log('Dentro do loop ', date)
                 requests.push(getCovidData(date))
             })
 
             Promise.all(requests)
                 .then(response => {
-                    console.log('Dentro do promise.All ', response)
-                    res.json(response.data)
+                    var covidData = []
+                    response.forEach(resp => {
+                        covidData = covidData.concat(resp)
+                    })
+                    res.json(covidData.map(({ city, confirmed_per_100k_inhabitants, date }) => ({ city, confirmed_per_100k_inhabitants, date })).sort((a, b) => Number(b.confirmed_per_100k_inhabitants) - Number(a.confirmed_per_100k_inhabitants)).slice(0, 10))
                 }).catch(error => {
-                    console.log('Deu erro ', error)
                     res.status(500).json([error])
                 })
 
             function getCovidData(day) {
                 return new Promise((resolve, reject) => {
-                    console.log('Vai chamar ', day, req.query.state)
                     axiosBrasilIo.get('caso/data/', {
                         headers: {
                             Authorization: brasilIoToken
