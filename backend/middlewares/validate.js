@@ -11,6 +11,11 @@ function checkParams(endPoint, query) {
         case '/salvarnanuvem':
             return validateSalvarNaNuvem(query)
             break
+        case '/listaestados':
+        case '/testeapi':
+            return Promise.resolve({})
+            break
+
         default:
             return Promise.reject(['Endpoint não informado ou inválido.'])
             break
@@ -51,9 +56,14 @@ function validateCovidPorEstadoPeriodo(query) {
             reject(invalidParms)
         }
 
-        privateApis.searchStates(query.state)
+        privateApis.searchStates()
             .then((response) => {
-                resolve(response)
+                let stateData = response.filter(estado => estado.sigla == query.state)
+                if (stateData.length == 0) {
+                    reject([`O estado ${state} é inválido.`])
+                }
+                console.log('StateData ', stateData)
+                resolve(stateData[0])
             }).catch(error => {
                 reject([error])
             })

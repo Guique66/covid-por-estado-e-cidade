@@ -1,30 +1,27 @@
 const util = require('../middlewares/util/util')
 const brasilIoToken = 'Token cd06accc7cba9e0b48b4d3106f3ea4359f593725'
 const axios = require('axios')
+
 axiosLocalidades = axios.create({
     baseURL: 'https://servicodados.ibge.gov.br/api/v1/localidades/',
 })
 
 axiosBrasilIo = axios.create({
-    baseURL: 'https://api.brasil.io/v1/dataset/covid19/'
+    baseURL: 'https://api.brasil.io/dataset/covid19/',
 })
 
 axiosNuvemMestra = axios.create({
-    baseURL: 'https://us-central1-lms-nuvem-mestra.cloudfunctions.net/'
+    baseURL: 'https://us-central1-lms-nuvem-mestra.cloudfunctions.net/',
 })
 
-function searchStates(state) {
+function searchStates() {
     return new Promise((resolve, reject) => {
         axiosLocalidades.get('estados', {
             params: {
                 orderBy: 'nome'
             }
         }).then(response => {
-            let stateData = response.data.filter(estado => estado.sigla == state)
-            if (stateData.length == 0) {
-                reject([`O estado ${state} é inválido.`])
-            }
-            resolve(stateData[0].nome)
+            resolve(response.data)
         }).catch(error => {
             reject([error])
         })
@@ -51,10 +48,11 @@ function searchCovidData(start, end, state, stateName) {
             })
 
         function getCovidData(day, state) {
+            console.log('Chegou no Brasil IO')
             return new Promise((resolve, reject) => {
                 axiosBrasilIo.get('caso/data/', {
                     headers: {
-                        Authorization: brasilIoToken
+                        Authorization: brasilIoToken,
                     },
                     params: {
                         state: state,
@@ -64,7 +62,8 @@ function searchCovidData(start, end, state, stateName) {
                     topTen = response.data.results.map(({ city, confirmed_per_100k_inhabitants }) => ({ city, confirmed_per_100k_inhabitants })).sort((a, b) => Number(b.confirmed_per_100k_inhabitants) - Number(a.confirmed_per_100k_inhabitants)).slice(0, 10)
                     resolve({ day: day, state: { abb: state, name: stateName }, topTen: topTen })
                 }).catch(error => {
-                    reject([error])
+                    console.log('Erro do Brasil IO ', error)
+                    reject(error.status)
                 })
             })
         }
@@ -72,23 +71,42 @@ function searchCovidData(start, end, state, stateName) {
 }
 
 
-function saveOnCloud(id, city, percent) {
+function saveOnCloud(dados) {
     return new Promise((resolve, reject) => {
-        axiosNuvemMestra.post('testeApi/', {
-            headers: {
-                MeuNome: user
-            },
-            params: {
-                id: id,
-                nomeCidade: city,
-                percentualDeCasos: percent
-            }
-        }).then(() => {
-            resolve('Solicitação processada com sucesso!')
-        }).catch(error => {
-            reject([error])
+        let requests = []
+        dados.forEach(dado => {
+            dado.topTen.forEach((top, index) => {
+                requests.push(saveCloud({ id: index + 1, city: top.city, perc: top.confirmed_per_100k_inhabitants }))
+            })
         })
+
+        Promise.all(requests)
+            .then(response => {
+                resolve(response)
+            }).catch(error => {
+                console.log(error)
+                reject([error])
+            })
+
+        function saveCloud(dados) {
+            return new Promise((resolve, reject) => {
+                axiosNuvemMestra.post('testeApi/', {
+                    headers: {
+                        MeuNome: 'Guilherme'
+                    },
+                    params: {
+                        id: dados.id,
+                        nomeCidade: dados.city,
+                        percentualDeCasos: dados.percent
+                    }
+                }).then(() => {
+                    console.log('Salvou corretamente')
+                    resolve('Solicitação processada com sucesso!')
+                }).catch(error => {
+                    reject([error])
+                })
+            })
+        }
     })
 }
-
 module.exports = { searchStates, searchCovidData, saveOnCloud }
